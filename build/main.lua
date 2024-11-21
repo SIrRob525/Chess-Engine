@@ -2,7 +2,7 @@
 function love.load()
     -- Set up the window
     love.window.setTitle("Simple Chess Game")
-    windowWidth, windowHeight = 800, 800
+    windowWidth, windowHeight = 700, 700
     love.window.setMode(windowWidth, windowHeight)
 
     -- Load the piece images
