@@ -2,8 +2,8 @@
 function love.load()
     -- Set up the window
     love.window.setTitle("Simple Chess Game")
-    windowWidth, windowHeight = 700, 700
-    love.window.setMode(windowWidth, windowHeight)
+    windowWidth = love.graphics.getWidth()
+    windowHeight = love.graphics.getHeight()
 
     -- Load the piece images
     pieceImages = {
@@ -23,11 +23,11 @@ function love.load()
 
     -- Define the board
     boardSize = 8
-    squareSize = 70
+    squareSize = math.min(windowWidth, windowHeight) * 0.8 / boardSize
     boardStartX = (windowWidth - (squareSize * boardSize)) / 2
     boardStartY = (windowHeight - (squareSize * boardSize)) / 2
 
-    -- Compute scale factor to fit the piece into the square (with some padding)
+    -- Compute scale factor for pieces
     local pieceOriginalWidth = pieceImages["white_pawn"]:getWidth()
     scaleFactor = (squareSize) / pieceOriginalWidth
 
@@ -41,9 +41,9 @@ function love.load()
     -- Flip button
     flipButton = {
         x = windowWidth / 2 - 40,
-        y = windowHeight - 40,
+        y = 20,
         width = 80,
-        height = 20,
+        height = 30,
         text = "Flip Board"
     }
 
@@ -59,6 +59,18 @@ function love.load()
     possibleMoves = {}
 end
 
+function love.resize(w, h)
+    windowWidth = w
+    windowHeight = h
+    squareSize = math.min(windowWidth, windowHeight) * 0.8 / boardSize
+    boardStartX = (windowWidth - (squareSize * boardSize)) / 2
+    boardStartY = (windowHeight - (squareSize * boardSize)) / 2
+    flipButton.x = windowWidth / 2 - flipButton.width / 2
+    -- Recompute scaleFactor
+    local pieceOriginalWidth = pieceImages["white_pawn"]:getWidth()
+    scaleFactor = (squareSize) / pieceOriginalWidth
+end
+
 function love.update(dt)
     -- Update the position of the selected piece if dragging
     if selectedPiece and love.mouse.isDown(1) then
@@ -66,11 +78,18 @@ function love.update(dt)
         selectedPiece.drawX = mouseX + mouseOffsetX
         selectedPiece.drawY = mouseY + mouseOffsetY
     end
+
+    -- Check for window resize (for love.js if love.resize isn't automatically called)
+    local currentWidth = love.graphics.getWidth()
+    local currentHeight = love.graphics.getHeight()
+    if currentWidth ~= windowWidth or currentHeight ~= windowHeight then
+        love.resize(currentWidth, currentHeight)
+    end
 end
 
 function love.draw()
     -- Draw the panel background
-    love.graphics.setColor(0.95, 0.89, 0.78) -- Light beige panel background
+    love.graphics.setColor(0.95, 0.89, 0.78)    
     love.graphics.rectangle("fill", 0, 0, windowWidth, windowHeight)
 
     -- Draw the border around the board
