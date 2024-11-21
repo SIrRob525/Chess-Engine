@@ -54,6 +54,9 @@ function love.load()
     selectedPiece = nil
     mouseOffsetX = 0
     mouseOffsetY = 0
+    mousePressedX = 0
+    mousePressedY = 0
+    isDragging = false
 
     -- Legal moves for the selected piece
     possibleMoves = {}
@@ -72,11 +75,23 @@ function love.resize(w, h)
 end
 
 function love.update(dt)
-    -- Update the position of the selected piece if dragging
     if selectedPiece and love.mouse.isDown(1) then
         local mouseX, mouseY = love.mouse.getPosition()
-        selectedPiece.drawX = mouseX + mouseOffsetX
-        selectedPiece.drawY = mouseY + mouseOffsetY
+        local dx = mouseX - mousePressedX
+        local dy = mouseY - mousePressedY
+        local dragThreshold = 5
+        if not isDragging and (dx * dx + dy * dy > dragThreshold * dragThreshold) then
+            isDragging = true
+            -- Prepare for dragging
+            selectedPiece.drawX = mouseX
+            selectedPiece.drawY = mouseY
+            mouseOffsetX = selectedPiece.drawX - mouseX
+            mouseOffsetY = selectedPiece.drawY - mouseY
+        end
+        if isDragging then
+            selectedPiece.drawX = mouseX + mouseOffsetX
+            selectedPiece.drawY = mouseY + mouseOffsetY
+        end
     end
 
     -- Check for window resize (for love.js if love.resize isn't automatically called)
@@ -112,6 +127,17 @@ function love.draw()
             end
             love.graphics.rectangle("fill", x, y, squareSize, squareSize)
         end
+    end
+
+    -- Highlight the selected piece's square
+    if selectedPiece and not isDragging then
+        local row = isFlipped and (boardSize - selectedPiece.origRow + 1) or selectedPiece.origRow
+        local col = isFlipped and (boardSize - selectedPiece.origCol + 1) or selectedPiece.origCol
+        local x = boardStartX + (col - 1) * squareSize
+        local y = boardStartY + (row - 1) * squareSize
+
+        love.graphics.setColor(0.5, 0.5, 0.5, 0.3) -- Semi-transparent grey
+        love.graphics.rectangle("fill", x, y, squareSize, squareSize)
     end
 
     -- Highlight possible moves
@@ -210,10 +236,45 @@ function love.draw()
     -- Draw the selected piece on top
     if selectedPiece then
         love.graphics.setColor(1, 1, 1)
+        local x, y
+        if isDragging then
+            x = selectedPiece.drawX
+            y = selectedPiece.drawY
+        else
+            -- Draw it in its square
+            local row = isFlipped and (boardSize - selectedPiece.origRow + 1) or selectedPiece.origRow
+            local col = isFlipped and (boardSize - selectedPiece.origCol + 1) or selectedPiece.origCol
+            x = boardStartX + (col - 0.5) * squareSize
+            y = boardStartY + (row - 0.5) * squareSize
+
+            -- *** Add this block to draw the red glow ***
+            -- Check if the selected piece is a king in check
+            local isKingInCheck = false
+            if selectedPiece.name == "white_king" and whiteKingInCheck then
+                isKingInCheck = true
+            elseif selectedPiece.name == "black_king" and blackKingInCheck then
+                isKingInCheck = true
+            end
+
+            if isKingInCheck then
+                -- Draw subtle red glow behind the king
+                local maxRadius = squareSize * 0.6
+                local steps = 15
+                for i = 1, steps do
+                    local radius = maxRadius * (i / steps)
+                    local alpha = 0.5 * (1 - (i - 1) / steps)
+                    love.graphics.setColor(1, 0, 0, alpha)
+                    love.graphics.circle("fill", x, y, radius)
+                end
+            end
+            -- *** End of added block ***
+        end
+        -- Draw the selected piece image
+        love.graphics.setColor(1, 1, 1)
         love.graphics.draw(
             pieceImages[selectedPiece.name],
-            selectedPiece.drawX,
-            selectedPiece.drawY,
+            x,
+            y,
             0, -- rotation
             scaleFactor,
             scaleFactor,
@@ -221,6 +282,7 @@ function love.draw()
             pieceImages[selectedPiece.name]:getHeight() / 2
         )
     end
+
 
     -- Draw the flip button
     love.graphics.setColor(0.8, 0.8, 0.8)
@@ -232,10 +294,17 @@ end
 
 function love.mousepressed(x, y, button, istouch, presses)
     if button == 1 then -- Left mouse button
+        mousePressedX = x
+        mousePressedY = y
+        isDragging = false
+
         -- Check if flip button was clicked
         if x >= flipButton.x and x <= flipButton.x + flipButton.width and
            y >= flipButton.y and y <= flipButton.y + flipButton.height then
             isFlipped = not isFlipped
+            -- Cancel selection and possible moves
+            selectedPiece = nil
+            possibleMoves = {}
             return
         end
 
@@ -249,20 +318,38 @@ function love.mousepressed(x, y, button, istouch, presses)
             local actualCol = isFlipped and (boardSize - col + 1) or col
             local piece = gameBoard:getPiece(actualRow, actualCol)
             if piece and piece.name:find(gameBoard.currentTurn) then
-                selectedPiece = piece
-                selectedPiece.origRow = actualRow
-                selectedPiece.origCol = actualCol
-                local mouseX, mouseY = love.mouse.getPosition()
-                selectedPiece.drawX = mouseX
-                selectedPiece.drawY = mouseY
-                mouseOffsetX = selectedPiece.drawX - mouseX
-                mouseOffsetY = selectedPiece.drawY - mouseY
-
-                -- Get possible moves from gameBoard
-                possibleMoves = gameBoard:getLegalMoves(actualRow, actualCol)
+                -- Clicked on own piece
+                if selectedPiece ~= piece then
+                    selectedPiece = piece
+                    selectedPiece.origRow = actualRow
+                    selectedPiece.origCol = actualCol
+                    -- Don't set drawX and drawY here
+                    possibleMoves = gameBoard:getLegalMoves(actualRow, actualCol)
+                end
             else
-                selectedPiece = nil
-                possibleMoves = {}
+                if selectedPiece then
+                    -- If clicked on a square
+                    -- Check if this square is a legal move
+                    local isLegalMove = false
+                    for _, move in ipairs(possibleMoves) do
+                        if move.row == actualRow and move.col == actualCol then
+                            isLegalMove = true
+                            break
+                        end
+                    end
+                    if isLegalMove then
+                        -- Move the piece
+                        if gameBoard:movePiece(selectedPiece.origRow, selectedPiece.origCol, actualRow, actualCol) then
+                            -- Move was successful
+                        end
+                    end
+                    selectedPiece = nil
+                    possibleMoves = {}
+                else
+                    -- Clicked on an invalid square, clear selection
+                    selectedPiece = nil
+                    possibleMoves = {}
+                end
             end
         else
             selectedPiece = nil
@@ -272,25 +359,29 @@ function love.mousepressed(x, y, button, istouch, presses)
 end
 
 function love.mousereleased(x, y, button, istouch, presses)
-    if button == 1 and selectedPiece then
-        -- Convert mouse coordinates to board indices
-        local col = math.floor((x - boardStartX) / squareSize) + 1
-        local row = math.floor((y - boardStartY) / squareSize) + 1
+    if button == 1 then
+        if isDragging and selectedPiece then
+            -- Handle drag-and-drop move
+            -- Convert mouse coordinates to board indices
+            local col = math.floor((x - boardStartX) / squareSize) + 1
+            local row = math.floor((y - boardStartY) / squareSize) + 1
 
-        -- Adjust for flipped board
-        local actualRow = isFlipped and (boardSize - row + 1) or row
-        local actualCol = isFlipped and (boardSize - col + 1) or col
+            -- Adjust for flipped board
+            local actualRow = isFlipped and (boardSize - row + 1) or row
+            local actualCol = isFlipped and (boardSize - col + 1) or col
 
-        local fromRow = selectedPiece.origRow
-        local fromCol = selectedPiece.origCol
+            local fromRow = selectedPiece.origRow
+            local fromCol = selectedPiece.origCol
 
-        if gameBoard:movePiece(fromRow, fromCol, actualRow, actualCol) then
-            -- Move was successful
-        else
-            -- Invalid move; no action needed since the piece wasn't removed from the board
+            if gameBoard:movePiece(fromRow, fromCol, actualRow, actualCol) then
+                -- Move was successful
+            else
+                -- Invalid move; no action needed since the piece wasn't removed from the board
+            end
+
+            selectedPiece = nil
+            possibleMoves = {}
         end
-
-        selectedPiece = nil
-        possibleMoves = {}
+        isDragging = false
     end
 end
