@@ -1,4 +1,54 @@
 -- main.lua
+local js
+local isBrowser = love.system and love.system.getOS() == "Web"
+
+-- Conditionally require the js module
+if isBrowser then
+    js = require "js"
+end
+
+-- Function to get evaluation
+function getEvaluation()
+    if isBrowser then
+        -- Running in the browser, use the JS module
+        local position = "current_position_placeholder"
+        local eval = js.global:getRandomEvaluation(position)
+        print("Evaluation from JavaScript (browser):", eval) -- Debug output
+        return eval
+    else
+        -- Running locally, use Node.js to execute the JavaScript file
+        local command
+
+        if love.system.getOS() == "Windows" then
+            -- Use 'start /B' to run Node.js without showing a window (Windows only)
+            command = 'start /B node ../html/model.js'
+        else
+            -- For Unix-based systems, just run Node.js
+            command = 'node ../html/model.js'
+        end
+
+        -- Run the command and capture output
+        local handle = io.popen(command)
+        local eval = handle:read("*all")
+        handle:close()
+
+        -- Trim whitespace from the evaluation string
+        eval = eval:gsub("^%s*(.-)%s*$", "%1")
+        
+        -- Convert the result to a number, as it will be read as a string
+        eval = tonumber(eval)
+        if eval then
+            print("Evaluation from JavaScript (local Node.js):", eval) -- Debug output
+            return eval
+        else
+            -- In case something went wrong, fallback to 0
+            print("Failed to get evaluation from JavaScript. Returning default value 0.")
+            return 0
+        end
+    end
+end
+
+
 function love.load()
     -- Set up the window
     love.window.setTitle("Simple Chess Game")
@@ -60,6 +110,9 @@ function love.load()
 
     -- Legal moves for the selected piece
     possibleMoves = {}
+
+    -- Initialize evaluation variable
+    evaluation = nil
 end
 
 function love.resize(w, h)
@@ -163,7 +216,6 @@ function love.draw()
         end
     end
 
-
     -- Draw the coordinates outside the board
     love.graphics.setColor(0, 0, 0)
     for i = 1, boardSize do
@@ -215,7 +267,6 @@ function love.draw()
                         love.graphics.circle("fill", x, y, radius)
                     end
                 end
-                
 
                 -- Draw the piece
                 love.graphics.setColor(1, 1, 1)
@@ -247,7 +298,6 @@ function love.draw()
             x = boardStartX + (col - 0.5) * squareSize
             y = boardStartY + (row - 0.5) * squareSize
 
-            -- *** Add this block to draw the red glow ***
             -- Check if the selected piece is a king in check
             local isKingInCheck = false
             if selectedPiece.name == "white_king" and whiteKingInCheck then
@@ -267,7 +317,6 @@ function love.draw()
                     love.graphics.circle("fill", x, y, radius)
                 end
             end
-            -- *** End of added block ***
         end
         -- Draw the selected piece image
         love.graphics.setColor(1, 1, 1)
@@ -283,13 +332,19 @@ function love.draw()
         )
     end
 
-
     -- Draw the flip button
     love.graphics.setColor(0.8, 0.8, 0.8)
     love.graphics.rectangle("fill", flipButton.x, flipButton.y, flipButton.width, flipButton.height)
     love.graphics.setColor(0, 0, 0)
     love.graphics.rectangle("line", flipButton.x, flipButton.y, flipButton.width, flipButton.height)
     love.graphics.printf(flipButton.text, flipButton.x, flipButton.y + 5, flipButton.width, "center")
+
+    -- Display the evaluation in the middle of the screen
+    if evaluation then
+        love.graphics.setColor(0, 0, 0)
+        local evalText = string.format("Evaluation: %.2f", evaluation)
+        love.graphics.printf(evalText, 0, windowHeight / 2 - 12, windowWidth, "center")
+    end
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
@@ -341,6 +396,7 @@ function love.mousepressed(x, y, button, istouch, presses)
                         -- Move the piece
                         if gameBoard:movePiece(selectedPiece.origRow, selectedPiece.origCol, actualRow, actualCol) then
                             -- Move was successful
+                            evaluation = getEvaluation() -- Get evaluation after move
                         end
                     end
                     selectedPiece = nil
@@ -375,6 +431,7 @@ function love.mousereleased(x, y, button, istouch, presses)
 
             if gameBoard:movePiece(fromRow, fromCol, actualRow, actualCol) then
                 -- Move was successful
+                evaluation = getEvaluation() -- Get evaluation after move
             else
                 -- Invalid move; no action needed since the piece wasn't removed from the board
             end

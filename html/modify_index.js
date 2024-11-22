@@ -12,13 +12,12 @@ let content = fs.readFileSync(indexFilePath, 'utf8');
 content = content.replace(/<h1>[\s\S]*?<\/h1>/i, '');
 
 // Remove the image
-content = content.replace(/<h1>[\s\S]*?<\/h1>/i, '');
+content = content.replace(/<img[^>]*>/i, '');
 
 // Remove the <footer> tag and its content
 content = content.replace(/<footer>[\s\S]*?<\/footer>/i, '');
 
-// Adjust the CSS to make the canvas fill the entire browser window
-// Inject the CSS before the closing </head> tag
+// Inject the CSS and include model.js before the closing </head> tag
 content = content.replace('</head>', `<style>
     html, body {
         margin: 0;
@@ -41,7 +40,10 @@ content = content.replace('</head>', `<style>
         width: 100%;
         height: auto;
     }
-    </style></head>`);
+    </style>
+    <!-- Include model.js -->
+    <script src="model.js"></script>
+    </head>`);
 
 // Remove any redundant empty lines
 content = content.replace(/\n\s*\n/g, '\n');
