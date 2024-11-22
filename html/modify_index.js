@@ -11,6 +11,9 @@ let content = fs.readFileSync(indexFilePath, 'utf8');
 // Remove the <h1> tag and its content
 content = content.replace(/<h1>[\s\S]*?<\/h1>/i, '');
 
+// Remove the image
+content = content.replace(/<h1>[\s\S]*?<\/h1>/i, '');
+
 // Remove the <footer> tag and its content
 content = content.replace(/<footer>[\s\S]*?<\/footer>/i, '');
 

@@ -7,6 +7,7 @@ call npx love.js.cmd -t chess game.love docs
 
 :: Step 2: Copy enable-threads.js to the output directory
 copy html\enable-threads.js docs\
+copy html\netify.toml docs\
 
 :: Step 3: Run modify_index.js to modify index.html
 node html\modify_index.js

@@ -1,3 +1,7 @@
 node_modules/
 package.json
 package-lock.json
+build.bat
+html/
+game.love
+server.js
